@@ -1,0 +1,597 @@
+from pathlib import Path
+import zipfile, json, os
+
+base = Path("/mnt/data/eagle_ai_pwa")
+base.mkdir(exist_ok=True)
+
+html = r'''<!doctype html>
+<html lang="ckb" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#101113">
+  <meta name="description" content="EAGLE AI - سیستەمی ڕێکخستنی کەیس و بەڵگە">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <title>EAGLE AI</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b0c0e;--panel:#15171a;--panel2:#1c1f23;--line:#2a2e33;--text:#f1f2f3;--muted:#a5abb2;--gold:#c5a45b;--green:#7fa58a}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 85% 0%,#242323 0,#0b0c0e 36%);color:var(--text);font-family:Tahoma,Arial,sans-serif}
+    header{padding:22px 18px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:13px}
+    .logo{width:48px;height:48px;border:1px solid #6e5b35;border-radius:14px;display:grid;place-items:center;color:var(--gold);font-size:25px;background:#191815}
+    h1{font-size:21px;letter-spacing:1px;margin:0}header p{margin:5px 0 0;color:var(--muted);font-size:12px}
+    main{max-width:900px;margin:auto;padding:18px}
+    .notice{background:#211e17;border:1px solid #55482e;color:#e7d7b2;padding:12px 14px;border-radius:12px;font-size:12px;line-height:1.8;margin-bottom:17px}
+    .section-title{font-size:15px;margin:20px 0 12px;color:#e5d3a8}
+    .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .card,.box{background:linear-gradient(145deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:15px;padding:15px}
+    .card strong{display:block;font-size:23px;color:var(--gold);margin-bottom:5px}.card span{font-size:11px;color:var(--muted)}
+    .actions{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+    button{font:inherit;cursor:pointer;border:1px solid var(--line);border-radius:12px;padding:13px;background:#202328;color:var(--text)}
+    button.primary{background:#69552f;border-color:#927747;color:white}
+    input,textarea,select{width:100%;background:#0e1012;border:1px solid var(--line);border-radius:10px;padding:12px;color:var(--text);font:inherit;margin:6px 0 12px}
+    label{font-size:12px;color:var(--muted)}
+    .case{display:flex;justify-content:space-between;gap:10px;align-items:center;border-bottom:1px solid var(--line);padding:12px 0}
+    .case:last-child{border:0}.tag{font-size:10px;color:#d9c18a;border:1px solid #665533;padding:4px 8px;border-radius:20px;white-space:nowrap}
+    .muted{color:var(--muted);font-size:12px;line-height:1.7}
+    .hidden{display:none}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    footer{text-align:center;color:#727980;font-size:10px;padding:25px 10px}
+    @media(max-width:520px){.cards{grid-template-columns:1fr 1fr}.cards .card:last-child{grid-column:span 2}.grid2{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo">🦅</div>
+  <div><h1>EAGLE AI</h1><p>سیستەمی ڕێکخستنی کەیس و بەڵگە</p></div>
+</header>
+<main>
+  <div class="notice">وەشانی تاقیکارییە. تەنها بۆ فێربوون و ڕێکخستنی زانیارییە نموونەییەکانە. زانیاریی نهێنی یان ڕاستەقینەی کەیس تێدا مەخەرەوە. ئەم ئەپە شوێنکەوتن، دەرهێنانی داتای مۆبایل، یان دیاریکردنی تاوانبار ناکات.</div>
+  <div class="section-title">پوختەی سیستەم</div>
+  <div class="cards">
+    <div class="card"><strong id="caseCount">0</strong><span>کەیسی تۆمارکراو</span></div>
+    <div class="card"><strong id="evidenceCount">0</strong><span>بەڵگەی تۆمارکراو</span></div>
+    <div class="card"><strong>ئامادە</strong><span>دۆخی سیستەم</span></div>
+  </div>
+
+  <div class="section-title">بەڕێوەبردن</div>
+  <div class="actions">
+    <button class="primary" onclick="show('newCase')">＋ تۆمارکردنی کەیس</button>
+    <button onclick="show('newEvidence')">＋ زیادکردنی بەڵگە</button>
+    <button onclick="show('caseList')">📁 لیستی کەیسەکان</button>
+    <button onclick="show('guidance')">🧠 ڕێنمایی AI</button>
+  </div>
+
+  <section id="newCase" class="box hidden" style="margin-top:16px">
+    <div class="section-title">کەیسی نوێ</div>
+    <label>ناونیشانی کەیس</label><input id="caseTitle" maxlength="80" placeholder="نموونە: کەیسی نموونە 001">
+    <label>کورتەی زانیاریی گشتی</label><textarea id="caseNote" rows="3" maxlength="500" placeholder="تەنها زانیارییە نموونەییەکان بنووسە"></textarea>
+    <button class="primary" onclick="addCase()">پاشەکەوتکردن</button> <button onclick="show('home')">داخستن</button>
+  </section>
+
+  <section id="newEvidence" class="box hidden" style="margin-top:16px">
+    <div class="section-title">بەڵگەی نوێ</div>
+    <label>جۆری بەڵگە</label><select id="evType"><option>بەڵگەی نووسراو</option><option>وێنەی گشتی</option><option>ڕاپۆرتی فەرمی</option><option>زانیاریی گشتی</option></select>
+    <label>پەیوەندی بە کەیس</label><select id="evCase"></select>
+    <label>تێبینییەکی کورت</label><textarea id="evNote" rows="3" maxlength="400" placeholder="سەرچاوە و کاتی وەرگرتنی بەڵگەکە بنووسە"></textarea>
+    <button class="primary" onclick="addEvidence()">پاشەکەوتکردن</button> <button onclick="show('home')">داخستن</button>
+  </section>
+
+  <section id="caseList" class="box hidden" style="margin-top:16px">
+    <div class="section-title">کەیسەکان</div><div id="cases"></div>
+    <button onclick="show('home')">گەڕانەوە</button>
+  </section>
+
+  <section id="guidance" class="box hidden" style="margin-top:16px">
+    <div class="section-title">یاریدەدەری ڕێنمایی</div>
+    <p class="muted">ئەم وەشانە AIی پەیوەستکراوی نییە. ئەم خاڵانە وەک ڕێنمایی بۆ ڕێکخستنی بەڵگە بەکاربهێنە:</p>
+    <ul class="muted">
+      <li>سەرچاوە و کاتی وەرگرتنی هەر بەڵگەیەک تۆمار بکە.</li>
+      <li>زانیاریی پشتڕاستکراوە لە گومان و گریمانە جیا بکەرەوە.</li>
+      <li>هیچ کەسێک بە تەنها لەسەر بنەمای هەڵسەنگاندنی ئەپ تاوانبار مەزانە.</li>
+      <li>بەڵگەی ڕاستەقینە تەنها لە ڕێگەی ڕێکاری یاسایی و سیستەمی پارێزراوی دامەزراوەیی بەڕێوەببە.</li>
+    </ul>
+    <button onclick="show('home')">گەڕانەوە</button>
+  </section>
+  <footer> EAGLE AI • وەشانی دیمۆ • داتاکان تەنها لە ناو ئەم وێبگەڕەدا هەڵدەگیرێن</footer>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let cases=JSON.parse(localStorage.getItem('eagle_cases')||'[]');
+let evidence=JSON.parse(localStorage.getItem('eagle_evidence')||'[]');
+function save(){localStorage.setItem('eagle_cases',JSON.stringify(cases));localStorage.setItem('eagle_evidence',JSON.stringify(evidence));refresh()}
+function show(id){['newCase','newEvidence','caseList','guidance'].forEach(x=>$(x).classList.add('hidden'));if(id!=='home')$(id).classList.remove('hidden');if(id==='caseList')renderCases();if(id==='newEvidence')fillCases()}
+function addCase(){let t=$('caseTitle').value.trim(),n=$('caseNote').value.trim();if(!t){alert('ناونیشانی کەیس بنووسە');return}cases.push({id:'EA-'+String(Date.now()).slice(-6),title:t,note:n,date:new Date().toLocaleDateString()});$('caseTitle').value='';$('caseNote').value='';save();show('home');alert('کەیسەکە تۆمارکرا')}
+function addEvidence(){let c=$('evCase').value;if(!c){alert('سەرەتا کەیسێک تۆمار بکە');return}evidence.push({type:$('evType').value,caseId:c,note:$('evNote').value.trim(),date:new Date().toLocaleDateString()});$('evNote').value='';save();show('home');alert('بەڵگەکە تۆمارکرا')}
+function fillCases(){$('evCase').innerHTML=cases.map(c=>`<option value="${c.id}">${esc(c.id)} — ${esc(c.title)}</option>`).join('');if(!cases.length)$('evCase').innerHTML='<option value="">هیچ کەیسێک نییە</option>'}
+function renderCases(){$('cases').innerHTML=cases.length?cases.map(c=>`<div class="case"><div><b>${esc(c.title)}</b><div class="muted">${esc(c.id)} • ${esc(c.date)}<br>${esc(c.note)}</div></div><span class="tag">تۆمارکراو</span></div>`).join(''):'<p class="muted">هێشتا هیچ کەیسێک تۆمار نەکراوە.</p>'}
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function refresh(){$('caseCount').textContent=cases.length;$('evidenceCount').textContent=evidence.length}
+refresh();
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
+</script>
+</body></html>'''
+
+manifest = {
+  "name": "EAGLE AI",
+  "short_name": "EAGLE AI",
+  "lang": "ckb",
+  "dir": "rtl",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b0c0e",
+  "theme_color": "#101113",
+  "icons": [{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
+sw = """const CACHE='eagle-ai-demo-v1';const FILES=['./','./index.html','./manifest.webmanifest','./icon.svg'];self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES))));self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));"""
+icon = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="100" fill="#101113"/><path d="M256 82 302 190 430 150 355 270 404 382 256 330 108 382 157 270 82 150 210 190Z" fill="#c5a45b"/><circle cx="256" cy="256" r="45" fill="#101113"/></svg>"""
+(base/"index.html").write_text(html, encoding="utf-8")
+(base/"manifest.webmanifest").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+(base/"sw.js").write_text(sw, encoding="utf-8")
+(base/"icon.svg").write_text(icon, encoding="utf-8")
+(base/"README-KU.txt").write_text("""EAGLE AI - وەشانی دیمۆی PWA
+
+ئەمە پڕۆتۆتایپێکی سەرەتاییە بۆ ڕێکخستنی کەیس و بەڵگەی نموونەیی.
+بۆ دامەزراندن وەک ئەپ لە Android:
+1) پێویستە فایلەکان لەسەر ماڵپەڕێکی HTTPS دابنرێن (یان سێرڤەری ناوخۆیی گونجاو).
+2) لە Chrome ـی Android ماڵپەڕەکە بکەرەوە.
+3) لە مێنیوی Chrome، "Add to Home screen" یان "Install app" هەڵبژێرە.
+
+تێبینیی گرنگ:
+- ئەمە وەشانی دیمۆیە، نە سیستەمی ئەمنییاتی فەرمی.
+- داتاکان لە localStorage ـی وێبگەڕدا هەڵدەگیرێن و پاراستنی دامەزراوەیی نییە.
+- هیچ زانیاریی ڕاستەقینە، نهێنی، کەسی یان هەستیاری تێدا مەخەرەوە.
+- شوێنکەوتنی کەسان، دەرهێنانی داتای مۆبایل و پشکنینی نهێنی پەیوەندییەکان لەخۆناگرێت.
+""", encoding="utf-8")
+zip_path = Path("/mnt/data/EAGLE_AI_PWA_demo.zip")
+with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+    for p in base.iterdir():
+        z.write(p, arcname=p.name)
+print(zip_path)
+from pathlib import Path
+import zipfile, json, os
+
+base = Path("/mnt/data/eagle_ai_pwa")
+base.mkdir(exist_ok=True)
+
+html = r'''<!doctype html>
+<html lang="ckb" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#101113">
+  <meta name="description" content="EAGLE AI - سیستەمی ڕێکخستنی کەیس و بەڵگە">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <title>EAGLE AI</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b0c0e;--panel:#15171a;--panel2:#1c1f23;--line:#2a2e33;--text:#f1f2f3;--muted:#a5abb2;--gold:#c5a45b;--green:#7fa58a}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 85% 0%,#242323 0,#0b0c0e 36%);color:var(--text);font-family:Tahoma,Arial,sans-serif}
+    header{padding:22px 18px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:13px}
+    .logo{width:48px;height:48px;border:1px solid #6e5b35;border-radius:14px;display:grid;place-items:center;color:var(--gold);font-size:25px;background:#191815}
+    h1{font-size:21px;letter-spacing:1px;margin:0}header p{margin:5px 0 0;color:var(--muted);font-size:12px}
+    main{max-width:900px;margin:auto;padding:18px}
+    .notice{background:#211e17;border:1px solid #55482e;color:#e7d7b2;padding:12px 14px;border-radius:12px;font-size:12px;line-height:1.8;margin-bottom:17px}
+    .section-title{font-size:15px;margin:20px 0 12px;color:#e5d3a8}
+    .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .card,.box{background:linear-gradient(145deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:15px;padding:15px}
+    .card strong{display:block;font-size:23px;color:var(--gold);margin-bottom:5px}.card span{font-size:11px;color:var(--muted)}
+    .actions{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+    button{font:inherit;cursor:pointer;border:1px solid var(--line);border-radius:12px;padding:13px;background:#202328;color:var(--text)}
+    button.primary{background:#69552f;border-color:#927747;color:white}
+    input,textarea,select{width:100%;background:#0e1012;border:1px solid var(--line);border-radius:10px;padding:12px;color:var(--text);font:inherit;margin:6px 0 12px}
+    label{font-size:12px;color:var(--muted)}
+    .case{display:flex;justify-content:space-between;gap:10px;align-items:center;border-bottom:1px solid var(--line);padding:12px 0}
+    .case:last-child{border:0}.tag{font-size:10px;color:#d9c18a;border:1px solid #665533;padding:4px 8px;border-radius:20px;white-space:nowrap}
+    .muted{color:var(--muted);font-size:12px;line-height:1.7}
+    .hidden{display:none}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    footer{text-align:center;color:#727980;font-size:10px;padding:25px 10px}
+    @media(max-width:520px){.cards{grid-template-columns:1fr 1fr}.cards .card:last-child{grid-column:span 2}.grid2{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo">🦅</div>
+  <div><h1>EAGLE AI</h1><p>سیستەمی ڕێکخستنی کەیس و بەڵگە</p></div>
+</header>
+<main>
+  <div class="notice">وەشانی تاقیکارییە. تەنها بۆ فێربوون و ڕێکخستنی زانیارییە نموونەییەکانە. زانیاریی نهێنی یان ڕاستەقینەی کەیس تێدا مەخەرەوە. ئەم ئەپە شوێنکەوتن، دەرهێنانی داتای مۆبایل، یان دیاریکردنی تاوانبار ناکات.</div>
+  <div class="section-title">پوختەی سیستەم</div>
+  <div class="cards">
+    <div class="card"><strong id="caseCount">0</strong><span>کەیسی تۆمارکراو</span></div>
+    <div class="card"><strong id="evidenceCount">0</strong><span>بەڵگەی تۆمارکراو</span></div>
+    <div class="card"><strong>ئامادە</strong><span>دۆخی سیستەم</span></div>
+  </div>
+
+  <div class="section-title">بەڕێوەبردن</div>
+  <div class="actions">
+    <button class="primary" onclick="show('newCase')">＋ تۆمارکردنی کەیس</button>
+    <button onclick="show('newEvidence')">＋ زیادکردنی بەڵگە</button>
+    <button onclick="show('caseList')">📁 لیستی کەیسەکان</button>
+    <button onclick="show('guidance')">🧠 ڕێنمایی AI</button>
+  </div>
+
+  <section id="newCase" class="box hidden" style="margin-top:16px">
+    <div class="section-title">کەیسی نوێ</div>
+    <label>ناونیشانی کەیس</label><input id="caseTitle" maxlength="80" placeholder="نموونە: کەیسی نموونە 001">
+    <label>کورتەی زانیاریی گشتی</label><textarea id="caseNote" rows="3" maxlength="500" placeholder="تەنها زانیارییە نموونەییەکان بنووسە"></textarea>
+    <button class="primary" onclick="addCase()">پاشەکەوتکردن</button> <button onclick="show('home')">داخستن</button>
+  </section>
+
+  <section id="newEvidence" class="box hidden" style="margin-top:16px">
+    <div class="section-title">بەڵگەی نوێ</div>
+    <label>جۆری بەڵگە</label><select id="evType"><option>بەڵگەی نووسراو</option><option>وێنەی گشتی</option><option>ڕاپۆرتی فەرمی</option><option>زانیاریی گشتی</option></select>
+    <label>پەیوەندی بە کەیس</label><select id="evCase"></select>
+    <label>تێبینییەکی کورت</label><textarea id="evNote" rows="3" maxlength="400" placeholder="سەرچاوە و کاتی وەرگرتنی بەڵگەکە بنووسە"></textarea>
+    <button class="primary" onclick="addEvidence()">پاشەکەوتکردن</button> <button onclick="show('home')">داخستن</button>
+  </section>
+
+  <section id="caseList" class="box hidden" style="margin-top:16px">
+    <div class="section-title">کەیسەکان</div><div id="cases"></div>
+    <button onclick="show('home')">گەڕانەوە</button>
+  </section>
+
+  <section id="guidance" class="box hidden" style="margin-top:16px">
+    <div class="section-title">یاریدەدەری ڕێنمایی</div>
+    <p class="muted">ئەم وەشانە AIی پەیوەستکراوی نییە. ئەم خاڵانە وەک ڕێنمایی بۆ ڕێکخستنی بەڵگە بەکاربهێنە:</p>
+    <ul class="muted">
+      <li>سەرچاوە و کاتی وەرگرتنی هەر بەڵگەیەک تۆمار بکە.</li>
+      <li>زانیاریی پشتڕاستکراوە لە گومان و گریمانە جیا بکەرەوە.</li>
+      <li>هیچ کەسێک بە تەنها لەسەر بنەمای هەڵسەنگاندنی ئەپ تاوانبار مەزانە.</li>
+      <li>بەڵگەی ڕاستەقینە تەنها لە ڕێگەی ڕێکاری یاسایی و سیستەمی پارێزراوی دامەزراوەیی بەڕێوەببە.</li>
+    </ul>
+    <button onclick="show('home')">گەڕانەوە</button>
+  </section>
+  <footer> EAGLE AI • وەشانی دیمۆ • داتاکان تەنها لە ناو ئەم وێبگەڕەدا هەڵدەگیرێن</footer>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let cases=JSON.parse(localStorage.getItem('eagle_cases')||'[]');
+let evidence=JSON.parse(localStorage.getItem('eagle_evidence')||'[]');
+function save(){localStorage.setItem('eagle_cases',JSON.stringify(cases));localStorage.setItem('eagle_evidence',JSON.stringify(evidence));refresh()}
+function show(id){['newCase','newEvidence','caseList','guidance'].forEach(x=>$(x).classList.add('hidden'));if(id!=='home')$(id).classList.remove('hidden');if(id==='caseList')renderCases();if(id==='newEvidence')fillCases()}
+function addCase(){let t=$('caseTitle').value.trim(),n=$('caseNote').value.trim();if(!t){alert('ناونیشانی کەیس بنووسە');return}cases.push({id:'EA-'+String(Date.now()).slice(-6),title:t,note:n,date:new Date().toLocaleDateString()});$('caseTitle').value='';$('caseNote').value='';save();show('home');alert('کەیسەکە تۆمارکرا')}
+function addEvidence(){let c=$('evCase').value;if(!c){alert('سەرەتا کەیسێک تۆمار بکە');return}evidence.push({type:$('evType').value,caseId:c,note:$('evNote').value.trim(),date:new Date().toLocaleDateString()});$('evNote').value='';save();show('home');alert('بەڵگەکە تۆمارکرا')}
+function fillCases(){$('evCase').innerHTML=cases.map(c=>`<option value="${c.id}">${esc(c.id)} — ${esc(c.title)}</option>`).join('');if(!cases.length)$('evCase').innerHTML='<option value="">هیچ کەیسێک نییە</option>'}
+function renderCases(){$('cases').innerHTML=cases.length?cases.map(c=>`<div class="case"><div><b>${esc(c.title)}</b><div class="muted">${esc(c.id)} • ${esc(c.date)}<br>${esc(c.note)}</div></div><span class="tag">تۆمارکراو</span></div>`).join(''):'<p class="muted">هێشتا هیچ کەیسێک تۆمار نەکراوە.</p>'}
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function refresh(){$('caseCount').textContent=cases.length;$('evidenceCount').textContent=evidence.length}
+refresh();
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
+</script>
+</body></html>'''
+
+manifest = {
+  "name": "EAGLE AI",
+  "short_name": "EAGLE AI",
+  "lang": "ckb",
+  "dir": "rtl",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b0c0e",
+  "theme_color": "#101113",
+  "icons": [{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
+sw = """const CACHE='eagle-ai-demo-v1';const FILES=['./','./index.html','./manifest.webmanifest','./icon.svg'];self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES))));self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));"""
+icon = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="100" fill="#101113"/><path d="M256 82 302 190 430 150 355 270 404 382 256 330 108 382 157 270 82 150 210 190Z" fill="#c5a45b"/><circle cx="256" cy="256" r="45" fill="#101113"/></svg>"""
+(base/"index.html").write_text(html, encoding="utf-8")
+(base/"manifest.webmanifest").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+(base/"sw.js").write_text(sw, encoding="utf-8")
+(base/"icon.svg").write_text(icon, encoding="utf-8")
+(base/"README-KU.txt").write_text("""EAGLE AI - وەشانی دیمۆی PWA
+
+ئەمە پڕۆتۆتایپێکی سەرەتاییە بۆ ڕێکخستنی کەیس و بەڵگەی نموونەیی.
+بۆ دامەزراندن وەک ئەپ لە Android:
+1) پێویستە فایلەکان لەسەر ماڵپەڕێکی HTTPS دابنرێن (یان سێرڤەری ناوخۆیی گونجاو).
+2) لە Chrome ـی Android ماڵپەڕەکە بکەرەوە.
+3) لە مێنیوی Chrome، "Add to Home screen" یان "Install app" هەڵبژێرە.
+
+تێبینیی گرنگ:
+- ئەمە وەشانی دیمۆیە، نە سیستەمی ئەمنییاتی فەرمی.
+- داتاکان لە localStorage ـی وێبگەڕدا هەڵدەگیرێن و پاراستنی دامەزراوەیی نییە.
+- هیچ زانیاریی ڕاستەقینە، نهێنی، کەسی یان هەستیاری تێدا مەخەرەوە.
+- شوێنکەوتنی کەسان، دەرهێنانی داتای مۆبایل و پشکنینی نهێنی پەیوەندییەکان لەخۆناگرێت.
+""", encoding="utf-8")
+zip_path = Path("/mnt/data/EAGLE_AI_PWA_demo.zip")
+with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+    for p in base.iterdir():
+        z.write(p, arcname=p.name)
+print(zip_path)
+from pathlib import Path
+import zipfile, json, os
+
+base = Path("/mnt/data/eagle_ai_pwa")
+base.mkdir(exist_ok=True)
+
+html = r'''<!doctype html>
+<html lang="ckb" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#101113">
+  <meta name="description" content="EAGLE AI - سیستەمی ڕێکخستنی کەیس و بەڵگە">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <title>EAGLE AI</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b0c0e;--panel:#15171a;--panel2:#1c1f23;--line:#2a2e33;--text:#f1f2f3;--muted:#a5abb2;--gold:#c5a45b;--green:#7fa58a}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 85% 0%,#242323 0,#0b0c0e 36%);color:var(--text);font-family:Tahoma,Arial,sans-serif}
+    header{padding:22px 18px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:13px}
+    .logo{width:48px;height:48px;border:1px solid #6e5b35;border-radius:14px;display:grid;place-items:center;color:var(--gold);font-size:25px;background:#191815}
+    h1{font-size:21px;letter-spacing:1px;margin:0}header p{margin:5px 0 0;color:var(--muted);font-size:12px}
+    main{max-width:900px;margin:auto;padding:18px}
+    .notice{background:#211e17;border:1px solid #55482e;color:#e7d7b2;padding:12px 14px;border-radius:12px;font-size:12px;line-height:1.8;margin-bottom:17px}
+    .section-title{font-size:15px;margin:20px 0 12px;color:#e5d3a8}
+    .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .card,.box{background:linear-gradient(145deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:15px;padding:15px}
+    .card strong{display:block;font-size:23px;color:var(--gold);margin-bottom:5px}.card span{font-size:11px;color:var(--muted)}
+    .actions{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+    button{font:inherit;cursor:pointer;border:1px solid var(--line);border-radius:12px;padding:13px;background:#202328;color:var(--text)}
+    button.primary{background:#69552f;border-color:#927747;color:white}
+    input,textarea,select{width:100%;background:#0e1012;border:1px solid var(--line);border-radius:10px;padding:12px;color:var(--text);font:inherit;margin:6px 0 12px}
+    label{font-size:12px;color:var(--muted)}
+    .case{display:flex;justify-content:space-between;gap:10px;align-items:center;border-bottom:1px solid var(--line);padding:12px 0}
+    .case:last-child{border:0}.tag{font-size:10px;color:#d9c18a;border:1px solid #665533;padding:4px 8px;border-radius:20px;white-space:nowrap}
+    .muted{color:var(--muted);font-size:12px;line-height:1.7}
+    .hidden{display:none}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    footer{text-align:center;color:#727980;font-size:10px;padding:25px 10px}
+    @media(max-width:520px){.cards{grid-template-columns:1fr 1fr}.cards .card:last-child{grid-column:span 2}.grid2{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo">🦅</div>
+  <div><h1>EAGLE AI</h1><p>سیستەمی ڕێکخستنی کەیس و بەڵگە</p></div>
+</header>
+<main>
+  <div class="notice">وەشانی تاقیکارییە. تەنها بۆ فێربوون و ڕێکخستنی زانیارییە نموونەییەکانە. زانیاریی نهێنی یان ڕاستەقینەی کەیس تێدا مەخەرەوە. ئەم ئەپە شوێنکەوتن، دەرهێنانی داتای مۆبایل، یان دیاریکردنی تاوانبار ناکات.</div>
+  <div class="section-title">پوختەی سیستەم</div>
+  <div class="cards">
+    <div class="card"><strong id="caseCount">0</strong><span>کەیسی تۆمارکراو</span></div>
+    <div class="card"><strong id="evidenceCount">0</strong><span>بەڵگەی تۆمارکراو</span></div>
+    <div class="card"><strong>ئامادە</strong><span>دۆخی سیستەم</span></div>
+  </div>
+
+  <div class="section-title">بەڕێوەبردن</div>
+  <div class="actions">
+    <button class="primary" onclick="show('newCase')">＋ تۆمارکردنی کەیس</button>
+    <button onclick="show('newEvidence')">＋ زیادکردنی بەڵگە</button>
+    <button onclick="show('caseList')">📁 لیستی کەیسەکان</button>
+    <button onclick="show('guidance')">🧠 ڕێنمایی AI</button>
+  </div>
+
+  <section id="newCase" class="box hidden" style="margin-top:16px">
+    <div class="section-title">کەیسی نوێ</div>
+    <label>ناونیشانی کەیس</label><input id="caseTitle" maxlength="80" placeholder="نموونە: کەیسی نموونە 001">
+    <label>کورتەی زانیاریی گشتی</label><textarea id="caseNote" rows="3" maxlength="500" placeholder="تەنها زانیارییە نموونەییەکان بنووسە"></textarea>
+    <button class="primary" onclick="addCase()">پاشەکەوتکردن</button> <button onclick="show('home')">داخستن</button>
+  </section>
+
+  <section id="newEvidence" class="box hidden" style="margin-top:16px">
+    <div class="section-title">بەڵگەی نوێ</div>
+    <label>جۆری بەڵگە</label><select id="evType"><option>بەڵگەی نووسراو</option><option>وێنەی گشتی</option><option>ڕاپۆرتی فەرمی</option><option>زانیاریی گشتی</option></select>
+    <label>پەیوەندی بە کەیس</label><select id="evCase"></select>
+    <label>تێبینییەکی کورت</label><textarea id="evNote" rows="3" maxlength="400" placeholder="سەرچاوە و کاتی وەرگرتنی بەڵگەکە بنووسە"></textarea>
+    <button class="primary" onclick="addEvidence()">پاشەکەوتکردن</button> <button onclick="show('home')">داخستن</button>
+  </section>
+
+  <section id="caseList" class="box hidden" style="margin-top:16px">
+    <div class="section-title">کەیسەکان</div><div id="cases"></div>
+    <button onclick="show('home')">گەڕانەوە</button>
+  </section>
+
+  <section id="guidance" class="box hidden" style="margin-top:16px">
+    <div class="section-title">یاریدەدەری ڕێنمایی</div>
+    <p class="muted">ئەم وەشانە AIی پەیوەستکراوی نییە. ئەم خاڵانە وەک ڕێنمایی بۆ ڕێکخستنی بەڵگە بەکاربهێنە:</p>
+    <ul class="muted">
+      <li>سەرچاوە و کاتی وەرگرتنی هەر بەڵگەیەک تۆمار بکە.</li>
+      <li>زانیاریی پشتڕاستکراوە لە گومان و گریمانە جیا بکەرەوە.</li>
+      <li>هیچ کەسێک بە تەنها لەسەر بنەمای هەڵسەنگاندنی ئەپ تاوانبار مەزانە.</li>
+      <li>بەڵگەی ڕاستەقینە تەنها لە ڕێگەی ڕێکاری یاسایی و سیستەمی پارێزراوی دامەزراوەیی بەڕێوەببە.</li>
+    </ul>
+    <button onclick="show('home')">گەڕانەوە</button>
+  </section>
+  <footer> EAGLE AI • وەشانی دیمۆ • داتاکان تەنها لە ناو ئەم وێبگەڕەدا هەڵدەگیرێن</footer>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let cases=JSON.parse(localStorage.getItem('eagle_cases')||'[]');
+let evidence=JSON.parse(localStorage.getItem('eagle_evidence')||'[]');
+function save(){localStorage.setItem('eagle_cases',JSON.stringify(cases));localStorage.setItem('eagle_evidence',JSON.stringify(evidence));refresh()}
+function show(id){['newCase','newEvidence','caseList','guidance'].forEach(x=>$(x).classList.add('hidden'));if(id!=='home')$(id).classList.remove('hidden');if(id==='caseList')renderCases();if(id==='newEvidence')fillCases()}
+function addCase(){let t=$('caseTitle').value.trim(),n=$('caseNote').value.trim();if(!t){alert('ناونیشانی کەیس بنووسە');return}cases.push({id:'EA-'+String(Date.now()).slice(-6),title:t,note:n,date:new Date().toLocaleDateString()});$('caseTitle').value='';$('caseNote').value='';save();show('home');alert('کەیسەکە تۆمارکرا')}
+function addEvidence(){let c=$('evCase').value;if(!c){alert('سەرەتا کەیسێک تۆمار بکە');return}evidence.push({type:$('evType').value,caseId:c,note:$('evNote').value.trim(),date:new Date().toLocaleDateString()});$('evNote').value='';save();show('home');alert('بەڵگەکە تۆمارکرا')}
+function fillCases(){$('evCase').innerHTML=cases.map(c=>`<option value="${c.id}">${esc(c.id)} — ${esc(c.title)}</option>`).join('');if(!cases.length)$('evCase').innerHTML='<option value="">هیچ کەیسێک نییە</option>'}
+function renderCases(){$('cases').innerHTML=cases.length?cases.map(c=>`<div class="case"><div><b>${esc(c.title)}</b><div class="muted">${esc(c.id)} • ${esc(c.date)}<br>${esc(c.note)}</div></div><span class="tag">تۆمارکراو</span></div>`).join(''):'<p class="muted">هێشتا هیچ کەیسێک تۆمار نەکراوە.</p>'}
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function refresh(){$('caseCount').textContent=cases.length;$('evidenceCount').textContent=evidence.length}
+refresh();
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
+</script>
+</body></html>'''
+
+manifest = {
+  "name": "EAGLE AI",
+  "short_name": "EAGLE AI",
+  "lang": "ckb",
+  "dir": "rtl",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b0c0e",
+  "theme_color": "#101113",
+  "icons": [{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
+sw = """const CACHE='eagle-ai-demo-v1';const FILES=['./','./index.html','./manifest.webmanifest','./icon.svg'];self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES))));self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));"""
+icon = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="100" fill="#101113"/><path d="M256 82 302 190 430 150 355 270 404 382 256 330 108 382 157 270 82 150 210 190Z" fill="#c5a45b"/><circle cx="256" cy="256" r="45" fill="#101113"/></svg>"""
+(base/"index.html").write_text(html, encoding="utf-8")
+(base/"manifest.webmanifest").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+(base/"sw.js").write_text(sw, encoding="utf-8")
+(base/"icon.svg").write_text(icon, encoding="utf-8")
+(base/"README-KU.txt").write_text("""EAGLE AI - وەشانی دیمۆی PWA
+
+ئەمە پڕۆتۆتایپێکی سەرەتاییە بۆ ڕێکخستنی کەیس و بەڵگەی نموونەیی.
+بۆ دامەزراندن وەک ئەپ لە Android:
+1) پێویستە فایلەکان لەسەر ماڵپەڕێکی HTTPS دابنرێن (یان سێرڤەری ناوخۆیی گونجاو).
+2) لە Chrome ـی Android ماڵپەڕەکە بکەرەوە.
+3) لە مێنیوی Chrome، "Add to Home screen" یان "Install app" هەڵبژێرە.
+
+تێبینیی گرنگ:
+- ئەمە وەشانی دیمۆیە، نە سیستەمی ئەمنییاتی فەرمی.
+- داتاکان لە localStorage ـی وێبگەڕدا هەڵدەگیرێن و پاراستنی دامەزراوەیی نییە.
+- هیچ زانیاریی ڕاستەقینە، نهێنی، کەسی یان هەستیاری تێدا مەخەرەوە.
+- شوێنکەوتنی کەسان، دەرهێنانی داتای مۆبایل و پشکنینی نهێنی پەیوەندییەکان لەخۆناگرێت.
+""", encoding="utf-8")
+zip_path = Path("/mnt/data/EAGLE_AI_PWA_demo.zip")
+with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+    for p in base.iterdir():
+        z.write(p, arcname=p.name)
+print(zip_path)
+from pathlib import Path
+import zipfile, json, os
+
+base = Path("/mnt/data/eagle_ai_pwa")
+base.mkdir(exist_ok=True)
+
+html = r'''<!doctype html>
+<html lang="ckb" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#101113">
+  <meta name="description" content="EAGLE AI - سیستەمی ڕێکخستنی کەیس و بەڵگە">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <title>EAGLE AI</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b0c0e;--panel:#15171a;--panel2:#1c1f23;--line:#2a2e33;--text:#f1f2f3;--muted:#a5abb2;--gold:#c5a45b;--green:#7fa58a}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 85% 0%,#242323 0,#0b0c0e 36%);color:var(--text);font-family:Tahoma,Arial,sans-serif}
+    header{padding:22px 18px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:13px}
+    .logo{width:48px;height:48px;border:1px solid #6e5b35;border-radius:14px;display:grid;place-items:center;color:var(--gold);font-size:25px;background:#191815}
+    h1{font-size:21px;letter-spacing:1px;margin:0}header p{margin:5px 0 0;color:var(--muted);font-size:12px}
+    main{max-width:900px;margin:auto;padding:18px}
+    .notice{background:#211e17;border:1px solid #55482e;color:#e7d7b2;padding:12px 14px;border-radius:12px;font-size:12px;line-height:1.8;margin-bottom:17px}
+    .section-title{font-size:15px;margin:20px 0 12px;color:#e5d3a8}
+    .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .card,.box{background:linear-gradient(145deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:15px;padding:15px}
+    .card strong{display:block;font-size:23px;color:var(--gold);margin-bottom:5px}.card span{font-size:11px;color:var(--muted)}
+    .actions{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+    button{font:inherit;cursor:pointer;border:1px solid var(--line);border-radius:12px;padding:13px;background:#202328;color:var(--text)}
+    button.primary{background:#69552f;border-color:#927747;color:white}
+    input,textarea,select{width:100%;background:#0e1012;border:1px solid var(--line);border-radius:10px;padding:12px;color:var(--text);font:inherit;margin:6px 0 12px}
+    label{font-size:12px;color:var(--muted)}
+    .case{display:flex;justify-content:space-between;gap:10px;align-items:center;border-bottom:1px solid var(--line);padding:12px 0}
+    .case:last-child{border:0}.tag{font-size:10px;color:#d9c18a;border:1px solid #665533;padding:4px 8px;border-radius:20px;white-space:nowrap}
+    .muted{color:var(--muted);font-size:12px;line-height:1.7}
+    .hidden{display:none}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    footer{text-align:center;color:#727980;font-size:10px;padding:25px 10px}
+    @media(max-width:520px){.cards{grid-template-columns:1fr 1fr}.cards .card:last-child{grid-column:span 2}.grid2{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo">🦅</div>
+  <div><h1>EAGLE AI</h1><p>سیستەمی ڕێکخستنی کەیس و بەڵگە</p></div>
+</header>
+<main>
+  <div class="notice">وەشانی تاقیکارییە. تەنها بۆ فێربوون و ڕێکخستنی زانیارییە نموونەییەکانە. زانیاریی نهێنی یان ڕاستەقینەی کەیس تێدا مەخەرەوە. ئەم ئەپە شوێنکەوتن، دەرهێنانی داتای مۆبایل، یان دیاریکردنی تاوانبار ناکات.</div>
+  <div class="section-title">پوختەی سیستەم</div>
+  <div class="cards">
+    <div class="card"><strong id="caseCount">0</strong><span>کەیسی تۆمارکراو</span></div>
+    <div class="card"><strong id="evidenceCount">0</strong><span>بەڵگەی تۆمارکراو</span></div>
+    <div class="card"><strong>ئامادە</strong><span>دۆخی سیستەم</span></div>
+  </div>
+
+  <div class="section-title">بەڕێوەبردن</div>
+  <div class="actions">
+    <button class="primary" onclick="show('newCase')">＋ تۆمارکردنی کەیس</button>
+    <button onclick="show('newEvidence')">＋ زیادکردنی بەڵگە</button>
+    <button onclick="show('caseList')">📁 لیستی کەیسەکان</button>
+    <button onclick="show('guidance')">🧠 ڕێنمایی AI</button>
+  </div>
+
+  <section id="newCase" class="box hidden" style="margin-top:16px">
+    <div class="section-title">کەیسی نوێ</div>
+    <label>ناونیشانی کەیس</label><input id="caseTitle" maxlength="80" placeholder="نموونە: کەیسی نموونە 001">
+    <label>کورتەی زانیاریی گشتی</label><textarea id="caseNote" rows="3" maxlength="500" placeholder="تەنها زانیارییە نموونەییەکان بنووسە"></textarea>
+    <button class="primary" onclick="addCase()">پاشەکەوتکردن</button> <button onclick="show('home')">داخستن</button>
+  </section>
+
+  <section id="newEvidence" class="box hidden" style="margin-top:16px">
+    <div class="section-title">بەڵگەی نوێ</div>
+    <label>جۆری بەڵگە</label><select id="evType"><option>بەڵگەی نووسراو</option><option>وێنەی گشتی</option><option>ڕاپۆرتی فەرمی</option><option>زانیاریی گشتی</option></select>
+    <label>پەیوەندی بە کەیس</label><select id="evCase"></select>
+    <label>تێبینییەکی کورت</label><textarea id="evNote" rows="3" maxlength="400" placeholder="سەرچاوە و کاتی وەرگرتنی بەڵگەکە بنووسە"></textarea>
+    <button class="primary" onclick="addEvidence()">پاشەکەوتکردن</button> <button onclick="show('home')">داخستن</button>
+  </section>
+
+  <section id="caseList" class="box hidden" style="margin-top:16px">
+    <div class="section-title">کەیسەکان</div><div id="cases"></div>
+    <button onclick="show('home')">گەڕانەوە</button>
+  </section>
+
+  <section id="guidance" class="box hidden" style="margin-top:16px">
+    <div class="section-title">یاریدەدەری ڕێنمایی</div>
+    <p class="muted">ئەم وەشانە AIی پەیوەستکراوی نییە. ئەم خاڵانە وەک ڕێنمایی بۆ ڕێکخستنی بەڵگە بەکاربهێنە:</p>
+    <ul class="muted">
+      <li>سەرچاوە و کاتی وەرگرتنی هەر بەڵگەیەک تۆمار بکە.</li>
+      <li>زانیاریی پشتڕاستکراوە لە گومان و گریمانە جیا بکەرەوە.</li>
+      <li>هیچ کەسێک بە تەنها لەسەر بنەمای هەڵسەنگاندنی ئەپ تاوانبار مەزانە.</li>
+      <li>بەڵگەی ڕاستەقینە تەنها لە ڕێگەی ڕێکاری یاسایی و سیستەمی پارێزراوی دامەزراوەیی بەڕێوەببە.</li>
+    </ul>
+    <button onclick="show('home')">گەڕانەوە</button>
+  </section>
+  <footer> EAGLE AI • وەشانی دیمۆ • داتاکان تەنها لە ناو ئەم وێبگەڕەدا هەڵدەگیرێن</footer>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let cases=JSON.parse(localStorage.getItem('eagle_cases')||'[]');
+let evidence=JSON.parse(localStorage.getItem('eagle_evidence')||'[]');
+function save(){localStorage.setItem('eagle_cases',JSON.stringify(cases));localStorage.setItem('eagle_evidence',JSON.stringify(evidence));refresh()}
+function show(id){['newCase','newEvidence','caseList','guidance'].forEach(x=>$(x).classList.add('hidden'));if(id!=='home')$(id).classList.remove('hidden');if(id==='caseList')renderCases();if(id==='newEvidence')fillCases()}
+function addCase(){let t=$('caseTitle').value.trim(),n=$('caseNote').value.trim();if(!t){alert('ناونیشانی کەیس بنووسە');return}cases.push({id:'EA-'+String(Date.now()).slice(-6),title:t,note:n,date:new Date().toLocaleDateString()});$('caseTitle').value='';$('caseNote').value='';save();show('home');alert('کەیسەکە تۆمارکرا')}
+function addEvidence(){let c=$('evCase').value;if(!c){alert('سەرەتا کەیسێک تۆمار بکە');return}evidence.push({type:$('evType').value,caseId:c,note:$('evNote').value.trim(),date:new Date().toLocaleDateString()});$('evNote').value='';save();show('home');alert('بەڵگەکە تۆمارکرا')}
+function fillCases(){$('evCase').innerHTML=cases.map(c=>`<option value="${c.id}">${esc(c.id)} — ${esc(c.title)}</option>`).join('');if(!cases.length)$('evCase').innerHTML='<option value="">هیچ کەیسێک نییە</option>'}
+function renderCases(){$('cases').innerHTML=cases.length?cases.map(c=>`<div class="case"><div><b>${esc(c.title)}</b><div class="muted">${esc(c.id)} • ${esc(c.date)}<br>${esc(c.note)}</div></div><span class="tag">تۆمارکراو</span></div>`).join(''):'<p class="muted">هێشتا هیچ کەیسێک تۆمار نەکراوە.</p>'}
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function refresh(){$('caseCount').textContent=cases.length;$('evidenceCount').textContent=evidence.length}
+refresh();
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
+</script>
+</body></html>'''
+
+manifest = {
+  "name": "EAGLE AI",
+  "short_name": "EAGLE AI",
+  "lang": "ckb",
+  "dir": "rtl",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b0c0e",
+  "theme_color": "#101113",
+  "icons": [{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
+sw = """const CACHE='eagle-ai-demo-v1';const FILES=['./','./index.html','./manifest.webmanifest','./icon.svg'];self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES))));self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));"""
+icon = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="100" fill="#101113"/><path d="M256 82 302 190 430 150 355 270 404 382 256 330 108 382 157 270 82 150 210 190Z" fill="#c5a45b"/><circle cx="256" cy="256" r="45" fill="#101113"/></svg>"""
+(base/"index.html").write_text(html, encoding="utf-8")
+(base/"manifest.webmanifest").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+(base/"sw.js").write_text(sw, encoding="utf-8")
+(base/"icon.svg").write_text(icon, encoding="utf-8")
+(base/"README-KU.txt").write_text("""EAGLE AI - وەشانی دیمۆی PWA
+
+ئەمە پڕۆتۆتایپێکی سەرەتاییە بۆ ڕێکخستنی کەیس و بەڵگەی نموونەیی.
+بۆ دامەزراندن وەک ئەپ لە Android:
+1) پێویستە فایلەکان لەسەر ماڵپەڕێکی HTTPS دابنرێن (یان سێرڤەری ناوخۆیی گونجاو).
+2) لە Chrome ـی Android ماڵپەڕەکە بکەرەوە.
+3) لە مێنیوی Chrome، "Add to Home screen" یان "Install app" هەڵبژێرە.
+
+تێبینیی گرنگ:
+- ئەمە وەشانی دیمۆیە، نە سیستەمی ئەمنییاتی فەرمی.
+- داتاکان لە localStorage ـی وێبگەڕدا هەڵدەگیرێن و پاراستنی دامەزراوەیی نییە.
+- هیچ زانیاریی ڕاستەقینە، نهێنی، کەسی یان هەستیاری تێدا مەخەرەوە.
+- شوێنکەوتنی کەسان، دەرهێنانی داتای مۆبایل و پشکنینی نهێنی پەیوەندییەکان لەخۆناگرێت.
+""", encoding="utf-8")
+zip_path = Path("/mnt/data/EAGLE_AI_PWA_demo.zip")
+with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+    for p in base.iterdir():
+        z.write(p, arcname=p.name)
+print(zip_path)
+https://github.com/lawantaha51-cmyk/eagle---Ai.gitEAGLE AI - Smart Artificial Intelligence Assistant
